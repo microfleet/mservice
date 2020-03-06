@@ -3,10 +3,10 @@ import Bluebird = require('bluebird')
 import Errors = require('common-errors')
 import { Request } from '@hapi/hapi'
 import noop = require('lodash/noop')
-import { FORMAT_HTTP_HEADERS } from 'opentracing'
 import { ActionTransport, Microfleet } from '../../../../..'
 import { ServiceRequest, RequestMethods } from '../../../../../types'
 import _require from '../../../../../utils/require'
+import { injectRequestHeaders, createChildSpan } from '../../../../../utils/opentracing'
 import { Router } from '../../../../router/factory'
 
 export default function getHapiAdapter(actionName: string, service: Microfleet) {
@@ -64,18 +64,13 @@ export default function getHapiAdapter(actionName: string, service: Microfleet) 
   return async function handler(request: Request) {
     const { headers } = request
 
-    let parentSpan
-    if (service.tracer !== undefined) {
-      parentSpan = service.tracer.extract(headers, FORMAT_HTTP_HEADERS)
-    }
-
     const serviceRequest: ServiceRequest = {
       // defaults for consistent object map
       // opentracing
       // set to console
       // transport type
       headers,
-      parentSpan,
+      parentSpan: createChildSpan(service.tracer, headers),
       action: noop as any,
       locals: Object.create(null),
       log: console as any,
@@ -89,11 +84,16 @@ export default function getHapiAdapter(actionName: string, service: Microfleet) 
     }
 
     let response
+    let outputHeaders
     try {
       response = await dispatch(actionName, serviceRequest)
+      outputHeaders = response.headers
     } catch (e) {
       response = reformatError(e)
+      outputHeaders = response.output.headers //
     }
+
+    injectRequestHeaders(service.tracer, serviceRequest, outputHeaders)
 
     return response
   }

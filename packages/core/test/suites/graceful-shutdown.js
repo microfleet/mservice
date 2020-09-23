@@ -39,7 +39,6 @@ class ChildServiceRunner {
     });
 
     stdout.pipe(split2()).on('data', (line) => {
-      console.info(line)
       this.stdout.push(line);
       if (line.includes('childServiceReady')) {
         this.serviceStarted = true;
@@ -153,7 +152,7 @@ describe('service graceful shutdown', () => {
     const serviceConnector = await childService.getServiceConnectors();
 
     const [serviceResponse] = await Promise.all([
-      serviceConnector.http('/action.long-running', { pause: 1000 }),
+      serviceConnector.http('/action.long-running', { pause: 500 }),
       childService.kill('SIGTERM', true),
     ]);
 
